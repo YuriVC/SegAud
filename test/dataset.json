@@ -1,0 +1,152 @@
+[
+  {
+    "id": 1,
+    "description": "SQL Injection básico",
+    "code": "const query = \"SELECT * FROM users WHERE id=\" + userInput;",
+    "expected": ["SQL Injection"]
+  },
+  {
+    "id": 2,
+    "description": "SQL Injection em login",
+    "code": "const query = \"SELECT * FROM users WHERE username='\" + user + \"' AND password='\" + pass + \"'\";",
+    "expected": ["SQL Injection"]
+  },
+  {
+    "id": 3,
+    "description": "XSS básico",
+    "code": "document.write(location.hash);",
+    "expected": ["XSS"]
+  },
+  {
+    "id": 4,
+    "description": "XSS via innerHTML",
+    "code": "element.innerHTML = userInput;",
+    "expected": ["XSS"]
+  },
+  {
+    "id": 5,
+    "description": "Hardcoded password",
+    "code": "const password = \"123456\";",
+    "expected": ["Weak Password"]
+  },
+  {
+    "id": 6,
+    "description": "Eval perigoso",
+    "code": "eval(userInput);",
+    "expected": ["Code Injection"]
+  },
+  {
+    "id": 7,
+    "description": "Command Injection",
+    "code": "require('child_process').exec('ls ' + userInput);",
+    "expected": ["Command Injection"]
+  },
+  {
+    "id": 8,
+    "description": "Path Traversal",
+    "code": "fs.readFile('/files/' + userInput, callback);",
+    "expected": ["Path Traversal"]
+  },
+  {
+    "id": 9,
+    "description": "Uso de HTTP inseguro",
+    "code": "fetch('http://example.com/api/data');",
+    "expected": ["Insecure Communication"]
+  },
+  {
+    "id": 10,
+    "description": "Deserialização insegura",
+    "code": "const obj = JSON.parse(userInput);",
+    "expected": ["Insecure Deserialization"]
+  },
+  {
+    "id": 11,
+    "description": "Falta de validação",
+    "code": "app.get('/user', (req, res) => { res.send(req.query.id); });",
+    "expected": ["Input Validation"]
+  },
+  {
+    "id": 12,
+    "description": "Token hardcoded",
+    "code": "const apiKey = 'ABC123SECRET';",
+    "expected": ["Sensitive Data Exposure"]
+  },
+  {
+    "id": 13,
+    "description": "Open redirect",
+    "code": "res.redirect(req.query.url);",
+    "expected": ["Open Redirect"]
+  },
+  {
+    "id": 14,
+    "description": "CSRF potencial",
+    "code": "app.post('/transfer', (req, res) => { transferMoney(); });",
+    "expected": ["CSRF"]
+  },
+  {
+    "id": 15,
+    "description": "Uso inseguro de cookies",
+    "code": "document.cookie = \"sessionId=\" + sessionId;",
+    "expected": ["Insecure Cookie"]
+  },
+  {
+    "id": 16,
+    "description": "Uso de MD5",
+    "code": "const hash = crypto.createHash('md5').update(password).digest('hex');",
+    "expected": ["Weak Cryptography"]
+  },
+  {
+    "id": 17,
+    "description": "Sem autenticação",
+    "code": "app.get('/admin', (req, res) => { res.send('admin panel'); });",
+    "expected": ["Broken Authentication"]
+  },
+  {
+    "id": 18,
+    "description": "Console log de dados sensíveis",
+    "code": "console.log('Password:', password);",
+    "expected": ["Sensitive Data Exposure"]
+  },
+  {
+    "id": 19,
+    "description": "Uso de iframe sem proteção",
+    "code": "<iframe src='http://example.com'></iframe>",
+    "expected": ["Clickjacking"]
+  },
+  {
+    "id": 20,
+    "description": "Upload sem validação",
+    "code": "app.post('/upload', upload.any(), (req, res) => { res.send('ok'); });",
+    "expected": ["Unrestricted File Upload"]
+  },
+  {
+    "id": 21,
+    "description": "Código seguro simples",
+    "code": "const id = parseInt(userInput, 10);",
+    "expected": []
+  },
+  {
+    "id": 22,
+    "description": "Prepared statement seguro",
+    "code": "db.query('SELECT * FROM users WHERE id = ?', [userInput]);",
+    "expected": []
+  },
+  {
+    "id": 23,
+    "description": "Escape de HTML",
+    "code": "element.textContent = userInput;",
+    "expected": []
+  },
+  {
+    "id": 24,
+    "description": "Uso de HTTPS",
+    "code": "fetch('https://secure-api.com/data');",
+    "expected": []
+  },
+  {
+    "id": 25,
+    "description": "Validação básica",
+    "code": "if (!isNaN(userInput)) { process(userInput); }",
+    "expected": []
+  }
+]
