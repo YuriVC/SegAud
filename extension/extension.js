@@ -1,45 +1,33 @@
-const vscode = require("vscode");
-const { analyzeCode } = require("./codeAnalyzerService");
+const vscode = require('vscode');
+const CodeAnalyzerService = require('./codeAnalyzerService');
 
 function activate(context) {
 
-  let disposable = vscode.commands.registerCommand(
-    "code-analyzer.analyze",
-    async function () {
+    const service = new CodeAnalyzerService();
 
-      const editor = vscode.window.activeTextEditor;
+    const disposable = vscode.commands.registerCommand(
+        'mn-analise.analyzeCodeCommand',
+        () => {
+            const editor = vscode.window.activeTextEditor;
 
-      if (!editor) {
-        vscode.window.showErrorMessage("Nenhum arquivo aberto.");
-        return;
-      }
+            if (!editor) {
+                vscode.window.showErrorMessage('No code selected');
+                return;
+            }
 
-      const selection = editor.document.getText(editor.selection);
+            const code = editor.document.getText(editor.selection)
+                || editor.document.getText();
 
-      if (!selection) {
-        vscode.window.showWarningMessage("Selecione um trecho de código.");
-        return;
-      }
+            service.analyze(code);
+        }
+    );
 
-      vscode.window.showInformationMessage("Analisando código...");
-
-      const result = await analyzeCode(selection);
-
-      vscode.window.showInformationMessage("Análise concluída.");
-
-      const panel = vscode.window.createOutputChannel("Code Analyzer");
-      panel.clear();
-      panel.appendLine(result);
-      panel.show(true);
-    }
-  );
-
-  context.subscriptions.push(disposable);
+    context.subscriptions.push(disposable);
 }
 
 function deactivate() {}
 
 module.exports = {
-  activate,
-  deactivate
+    activate,
+    deactivate
 };

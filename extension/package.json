@@ -1,9 +1,9 @@
 {
   "name": "mn-analise",
-  "displayName": "mn-analise",
+  "displayName": "mn-analise-yuri",
   "publisher": "Yuri Viana",
-  "description": "Local AI code analyzer using Ollama",
-  "version": "5.0.4",
+  "description": "AI code analyzer with multiple providers",
+  "version": "6.0.0",
   "engines": {
     "vscode": "^1.84.0"
   },
@@ -17,63 +17,52 @@
         "title": "Search vulnerabilities"
       }
     ],
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "mnAnaliseViewContainer",
-          "title": "MN Analise"
+
+    "configuration": {
+      "title": "MN-Analise",
+      "properties": {
+
+        "mn-analise.01.language": {
+          "type": "string",
+          "default": "English",
+          "enum": ["English", "Português (BR)"]
+        },
+
+        "mn-analise.02.aiProvider": {
+          "type": "string",
+          "default": "ollama",
+          "enum": ["ollama", "anthropic", "mistral", "qwen"]
+        },
+
+        "mn-analise.03.anthropicApiKey": {
+          "type": "string",
+          "default": ""
+        },
+
+        "mn-analise.04.mistralApiKey": {
+          "type": "string",
+          "default": ""
+        },
+
+        "mn-analise.05.ollamaModel": {
+          "type": "string",
+          "default": "llama3"
+        },
+
+        "mn-analise.06.ollamaEndpoint": {
+          "type": "string",
+          "default": "http://localhost:11434/api/generate"
+        },
+
+        "mn-analise.07.qwenApiKey": {
+          "type": "string",
+          "default": ""
         }
-      ]
-    },
-    "views": {
-      "mnAnaliseViewContainer": [
-        {
-          "id": "mnAnaliseView",
-          "name": "MN Analise"
-        }
-      ]
-    },
-"configuration": {
-  "title": "MN-Analise",
-  "properties": {
-    "mn-analise.language": {
-      "type": "string",
-      "default": "English",
-      "enum": ["English", "Português (BR)"]
-    },
-
-    "mn-analise.aiProvider": {
-      "type": "string",
-      "default": "anthropic",
-      "enum": ["anthropic", "ollama"],
-      "description": "AI provider"
-    },
-
-    "mn-analise.03.anthropicApiKey": {
-      "type": "string",
-      "default": "",
-      "description": "Anthropic API key (Claude)"
-    },
-
-    "mn-analise.05.ollamaModel": {
-      "type": "string",
-      "default": "llama3",
-      "description": "Ollama model (llama3, codellama, mistral)"
-    },
-
-    "mn-analise.06.ollamaEndpoint": {
-      "type": "string",
-      "default": "http://localhost:11434/v1/messages",
-      "description": "Ollama Anthropic-compatible endpoint"
+      }
     }
-  }
-}
-  },
-
-  "scripts": {
-    "lint": "eslint ."
   },
 
   "dependencies": {
+    "node-fetch": "^3.3.2"
   }
 }

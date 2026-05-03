@@ -163,7 +163,7 @@ class CodeAnalyzerService {
     }
 }
 
-module.exports = CodeAnalyzerService; */
+module.exports = CodeAnalyzerService;
 
 const vscode = require('vscode');
 const Config = require('./config');
@@ -301,6 +301,514 @@ class CodeAnalyzerService {
                 </div>
             </body>
             </html>`;
+    }
+}
+
+module.exports = CodeAnalyzerService;
+
+const vscode = require('vscode');
+const Config = require('./config');
+const fetch = global.fetch || require('node-fetch');
+
+class CodeAnalyzerService {
+    constructor() {
+        this.logger = vscode.window.createOutputChannel('Code Analyzer');
+    }
+
+    log(message) {
+        this.logger.appendLine(message);
+    }
+
+    // ==============================
+    // OLLAMA
+    // ==============================
+    async analyzeAnthropic(code) {
+        const response = await fetch(Config.endpoint, {
+            method: 'POST',
+            headers: {
+                'x-api-key': Config.apiKey,
+                'anthropic-version': '2023-06-01',
+                'content-type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: Config.model,
+                max_tokens: 1024,
+                messages: [
+                    {
+                        role: 'user',
+                        content: `${Config.prompt}\n${code}`
+                    }
+                ]
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(await response.text());
+        }
+
+        const json = await response.json();
+        return json.content?.[0]?.text || 'No response';
+    }
+
+    // ==============================
+    // OPENAI (Mistral / DeepSeek)
+    // ==============================
+    async analyzeOpenAI(code) {
+        const response = await fetch(Config.endpoint, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${Config.apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: Config.model,
+                messages: [
+                    {
+                        role: 'user',
+                        content: `${Config.prompt}\n${code}`
+                    }
+                ],
+                temperature: 0
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(await response.text());
+        }
+
+        const json = await response.json();
+        return json.choices?.[0]?.message?.content || 'No response';
+    }
+
+    // ==============================
+    // MAIN
+    // ==============================
+    async analyzeCode(code) {
+        try {
+            Config.validate();
+
+            this.log(`Provider: ${Config.aiProvider}`);
+            this.log(`Model: ${Config.model}`);
+
+            const start = Date.now();
+
+            let result;
+
+            if (Config.aiProvider === 'ollama') {
+                result = await this.analyzeAnthropic(code);
+            } else {
+                result = await this.analyzeOpenAI(code);
+            }
+
+            const latency = Date.now() - start;
+            this.log(`Latency: ${latency} ms`);
+
+            this.showResult(result, latency);
+
+        } catch (error) {
+            vscode.window.showErrorMessage(error.message);
+        }
+    }
+
+    // ==============================
+    // UI
+    // ==============================
+    showResult(text, latency) {
+        const panel = vscode.window.createWebviewPanel(
+            'analysis',
+            'Vulnerability Analysis',
+            vscode.ViewColumn.Beside,
+            {}
+        );
+
+        panel.webview.html = `
+        <html>
+        <body style="font-family: Arial; padding: 10px;">
+            <h2>Vulnerability Analysis</h2>
+            <p><b>Provider:</b> ${Config.aiProvider}</p>
+            <p><b>Model:</b> ${Config.model}</p>
+            <p><b>Latency:</b> ${latency} ms</p>
+            <pre>${text}</pre>
+        </body>
+        </html>`;
+    }
+}
+
+module.exports = CodeAnalyzerService; 
+
+
+const vscode = require('vscode');
+const fetch = global.fetch || require('node-fetch');
+const Config = require('./config');
+
+class CodeAnalyzerService {
+
+    constructor() {
+        this.logger = vscode.window.createOutputChannel('Code Analyzer');
+    }
+
+    log(msg) {
+        this.logger.appendLine(msg);
+    }
+
+async analyze(code) {
+
+    Config.validate();
+
+    const start = Date.now();
+
+    let response;
+
+    console.log("Provider:", Config.aiProvider);
+
+    // ===============================
+    // OLLAMA (LOCAL)
+    // ===============================
+    if (Config.aiProvider === 'ollama') {
+
+        response = await fetch(Config.endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: Config.model,
+                prompt: `${Config.prompt}\n${code}`,
+                stream: false
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(await response.text());
+        }
+
+        const json = await response.json();
+        const result = json.response || 'No response';
+
+        this.showResult(result, Date.now() - start);
+        return;
+    }
+
+    // ===============================
+    // ANTHROPIC (Claude)
+    // ===============================
+    if (Config.aiProvider === 'anthropic') {
+
+        response = await fetch(Config.endpoint, {
+            method: 'POST',
+            headers: {
+                'x-api-key': Config.apiKey,
+                'anthropic-version': '2023-06-01',
+                'content-type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: Config.model,
+                max_tokens: 1024,
+                messages: [
+                    {
+                        role: 'user',
+                        content: `${Config.prompt}\n${code}`
+                    }
+                ]
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(await response.text());
+        }
+
+        const json = await response.json();
+        const result = json.content?.[0]?.text || 'No response';
+
+        this.showResult(result, Date.now() - start);
+        return;
+    }
+
+    // ===============================
+    // MISTRAL
+    // ===============================
+    if (Config.aiProvider === 'mistral') {
+
+        response = await fetch(Config.endpoint, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${Config.apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: Config.model,
+                messages: [
+                    {
+                        role: 'user',
+                        content: `${Config.prompt}\n${code}`
+                    }
+                ]
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(await response.text());
+        }
+
+        const json = await response.json();
+        const result = json.choices?.[0]?.message?.content || 'No response';
+
+        this.showResult(result, Date.now() - start);
+        return;
+    }
+
+    // ===============================
+    // DEEPSEEK
+    // ===============================
+    if (Config.aiProvider === 'deepseek') {
+
+    response = await fetch(Config.endpoint, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${Config.apiKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'http://localhost',
+            'X-Title': 'mn-analise'
+        },
+        body: JSON.stringify({
+            model: Config.model,
+            messages: [
+                {
+                    role: 'user',
+                    content: `${Config.prompt}\n${code}`
+                }
+            ]
+        })
+    });
+
+    if (!response.ok) {
+        throw new Error(await response.text());
+    }
+
+    const json = await response.json();
+
+    const result = json.choices?.[0]?.message?.content || 'No response';
+
+    const latency = Date.now() - start;
+
+    this.showResult(result, latency);
+    return;
+}
+
+    // ===============================
+    // FALLBACK
+    // ===============================
+    throw new Error(`Provider not supported: ${Config.aiProvider}`);
+}
+
+    showResult(text, latency) {
+
+        const panel = vscode.window.createWebviewPanel(
+            'analysis',
+            'Vulnerability Analysis',
+            vscode.ViewColumn.Beside,
+            {}
+        );
+
+        panel.webview.html = `
+        <html>
+        <body style="font-family: Arial; padding: 10px;">
+            <h2>Vulnerability Analysis</h2>
+            <p><b>Provider:</b> ${Config.aiProvider}</p>
+            <p><b>Model:</b> ${Config.model}</p>
+            <p><b>Latency:</b> ${latency} ms</p>
+            <pre>${text}</pre>
+        </body>
+        </html>`;
+    }
+}
+
+module.exports = CodeAnalyzerService;
+
+*/
+
+const vscode = require('vscode');
+const fetch = global.fetch || require('node-fetch');
+const Config = require('./config');
+
+class CodeAnalyzerService {
+
+    constructor() {
+        this.logger = vscode.window.createOutputChannel('Code Analyzer');
+    }
+
+    log(msg) {
+        this.logger.appendLine(msg);
+    }
+
+    async analyze(code) {
+
+        Config.validate();
+        const start = Date.now();
+
+        let result;
+
+        switch (Config.aiProvider) {
+
+            case 'ollama':
+                result = await this.callOllama(code);
+                break;
+
+            case 'anthropic':
+                result = await this.callAnthropic(code);
+                break;
+
+            case 'mistral':
+                result = await this.callMistral(code);
+                break;
+
+            case 'qwen':
+                result = await this.callQwen(code);
+                break;
+
+            default:
+                throw new Error('Unsupported provider');
+        }
+
+        this.showResult(result, Date.now() - start);
+    }
+
+    // =========================
+    // OLLAMA
+    // =========================
+    async callOllama(code) {
+        const res = await fetch(Config.endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: Config.model,
+                prompt: `${Config.prompt}\n${code}`,
+                stream: false
+            })
+        });
+
+        const json = await res.json();
+        return json.response;
+    }
+
+    // =========================
+    // ANTHROPIC
+    // =========================
+    async callAnthropic(code) {
+        const res = await fetch(Config.endpoint, {
+            method: 'POST',
+            headers: {
+                'x-api-key': Config.apiKey,
+                'anthropic-version': '2023-06-01',
+                'content-type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: Config.model,
+                max_tokens: 1024,
+                messages: [{
+                    role: 'user',
+                    content: `${Config.prompt}\n${code}`
+                }]
+            })
+        });
+
+        const json = await res.json();
+        return json.content?.[0]?.text;
+    }
+
+    // =========================
+    // MISTRAL
+    // =========================
+    async callMistral(code) {
+        const res = await fetch(Config.endpoint, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${Config.apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: Config.model,
+                messages: [{
+                    role: 'user',
+                    content: `${Config.prompt}\n${code}`
+                }]
+            })
+        });
+
+        const json = await res.json();
+        return json.choices?.[0]?.message?.content;
+    }
+
+    // =========================
+    // QWEN (DashScope)
+    // =========================
+    async callQwen(code) {
+    const res = await fetch(Config.endpoint, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${Config.apiKey}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            model: Config.model,
+            input: {
+                messages: [{
+                    role: 'user',
+                    content: `${Config.prompt}\n${code}`
+                }]
+            }
+        })
+    });
+
+    // 👇 importante: pegar como texto primeiro
+    const text = await res.text();
+
+    // debug
+    console.log("QWEN RAW:", text);
+
+    if (!res.ok) {
+        throw new Error(text);
+    }
+
+    const json = JSON.parse(text);
+
+    // Extração inteligente do resultado, considerando diferentes formatos de resposta
+    let result =
+        json?.output?.choices?.[0]?.message?.content ||
+        json?.output?.choices?.[0]?.text ||
+        json?.output?.text ||
+        json?.output ||
+        'No response';
+
+    // fallback caso venha objeto
+    if (typeof result === 'object') {
+        result = JSON.stringify(result, null, 2);
+    }
+
+    return result;
+}
+
+    // =========================
+    // UI
+    // =========================
+    showResult(text, latency) {
+        const panel = vscode.window.createWebviewPanel(
+            'analysis',
+            'Vulnerability Analysis',
+            vscode.ViewColumn.Beside,
+            {}
+        );
+
+        panel.webview.html = `
+        <html>
+        <body style="font-family: Arial; padding: 10px;">
+            <h2>Vulnerability Analysis</h2>
+            <p><b>Provider:</b> ${Config.aiProvider}</p>
+            <p><b>Model:</b> ${Config.model}</p>
+            <p><b>Latency:</b> ${latency} ms</p>
+            <pre>${text}</pre>
+        </body>
+        </html>`;
     }
 }
 
