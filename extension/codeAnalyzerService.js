@@ -643,53 +643,64 @@ class CodeAnalyzerService {
 
     async analyze(code) {
 
-        Config.validate();
-        const start = Date.now();
+    Config.validate();
+    const start = Date.now();
 
-        let result;
+    let result;
 
-        switch (Config.aiProvider) {
+    switch (Config.aiProvider) {
 
-            case 'ollama':
-                result = await this.callOllama(code);
-                break;
+        case 'ollama':
+            result = await this.callOllama(code);
+            break;
 
-            case 'anthropic':
-                result = await this.callAnthropic(code);
-                break;
+        case 'anthropic':
+            result = await this.callAnthropic(code);
+            break;
 
-            case 'mistral':
-                result = await this.callMistral(code);
-                break;
+        case 'mistral':
+            result = await this.callMistral(code);
+            break;
 
-            case 'qwen':
-                result = await this.callQwen(code);
-                break;
+        case 'gemma':
+            result = await this.callGemma(code);
+            break;
 
-            default:
-                throw new Error('Unsupported provider');
-        }
-
-        this.showResult(result, Date.now() - start);
+        default:
+            throw new Error(`Unsupported provider: ${Config.aiProvider}`);
     }
+
+    this.showResult(result, Date.now() - start);
+}
 
     // =========================
     // OLLAMA
     // =========================
     async callOllama(code) {
-        const res = await fetch(Config.endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                model: Config.model,
-                prompt: `${Config.prompt}\n${code}`,
-                stream: false
-            })
-        });
 
-        const json = await res.json();
-        return json.response;
-    }
+    const res = await fetch(Config.endpoint, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            model: Config.model, // 👈 AQUI GEMMA OU LLAMA
+            prompt: `${Config.prompt}\n\n${code}`,
+            stream: false
+        })
+    });
+
+    const json = await res.json();
+
+    console.log("OLLAMA RAW:", json);
+
+    return (
+        json?.response ||
+        json?.message?.content ||
+        json?.output ||
+        "EMPTY_RESPONSE"
+    );
+}
 
     // =========================
     // ANTHROPIC
@@ -740,54 +751,43 @@ class CodeAnalyzerService {
     }
 
     // =========================
-    // QWEN (DashScope)
+    // GEMMA
     // =========================
-    async callQwen(code) {
+    async callGemma(code) {
+
     const res = await fetch(Config.endpoint, {
         method: 'POST',
         headers: {
-            'Authorization': `Bearer ${Config.apiKey}`,
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            model: Config.model,
-            input: {
-                messages: [{
+            model: 'gemma3',
+            messages: [
+                {
                     role: 'user',
-                    content: `${Config.prompt}\n${code}`
-                }]
-            }
+                    content: `${Config.prompt}\n\n${code}`
+                }
+            ],
+            stream: false
         })
     });
 
-    // 👇 importante: pegar como texto primeiro
-    const text = await res.text();
+    const json = await res.json();
 
-    // debug
-    console.log("QWEN RAW:", text);
+    console.log("GEMMA RAW:", json);
 
-    if (!res.ok) {
-        throw new Error(text);
+    const result =
+        json?.message?.content ??
+        json?.response ??
+        json?.output ??
+        json?.choices?.[0]?.message?.content;
+
+    if (!result) {
+        console.log("UNKNOWN FORMAT:", json);
     }
 
-    const json = JSON.parse(text);
-
-    // Extração inteligente do resultado, considerando diferentes formatos de resposta
-    let result =
-        json?.output?.choices?.[0]?.message?.content ||
-        json?.output?.choices?.[0]?.text ||
-        json?.output?.text ||
-        json?.output ||
-        'No response';
-
-    // fallback caso venha objeto
-    if (typeof result === 'object') {
-        result = JSON.stringify(result, null, 2);
-    }
-
-    return result;
+    return result || "EMPTY_RESPONSE";
 }
-
     // =========================
     // UI
     // =========================

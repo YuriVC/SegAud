@@ -31,7 +31,7 @@
         "mn-analise.02.aiProvider": {
           "type": "string",
           "default": "ollama",
-          "enum": ["ollama", "anthropic", "mistral", "qwen"]
+          "enum": ["ollama", "anthropic", "mistral", "gemma"]
         },
 
         "mn-analise.03.anthropicApiKey": {
@@ -52,11 +52,6 @@
         "mn-analise.06.ollamaEndpoint": {
           "type": "string",
           "default": "http://localhost:11434/api/generate"
-        },
-
-        "mn-analise.07.qwenApiKey": {
-          "type": "string",
-          "default": ""
         }
       }
     }
