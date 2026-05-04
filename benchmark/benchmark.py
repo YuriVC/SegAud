@@ -14,6 +14,14 @@ import pandas as pd
 # ==============================
 
 TIMEOUT = 30
+RETRIES = 2
+
+PROMPT = (
+    "Detect vulnerabilities in this code and return ONLY the vulnerability type "
+    "(SQL Injection, XSS, Command Injection, Path Traversal or None)."
+)
+
+LABELS = ["SQL Injection", "XSS", "Command Injection", "Path Traversal", "None"]
 
 PROVIDERS = {
     "mistral": {
@@ -22,23 +30,19 @@ PROVIDERS = {
         "model": "mistral-small",
         "type": "openai"
     },
-    "deepseek": {
-        "url": "https://openrouter.ai/api/v1/chat/completions",
-        "api_key": os.getenv("OPENROUTER_API_KEY"),
-        "model": "deepseek/deepseek-v4-pro",
-        "type": "openrouter"
-    },
     "ollama": {
-        "url": "http://localhost:11434/api/generate",
+        "url": "http://localhost:11434/api/chat",
         "api_key": None,
         "model": "llama3",
         "type": "ollama"
+    },
+    "gemma": {
+        "url": "http://localhost:11434/api/chat",
+        "api_key": None,
+        "model": "gemma3",
+        "type": "ollama"
     }
 }
-
-PROMPT = "Detect vulnerabilities in this code and return ONLY the vulnerability type (SQL Injection, XSS, Command Injection, Path Traversal or None)."
-
-LABELS = ["SQL Injection", "XSS", "Command Injection", "Path Traversal", "None"]
 
 # ==============================
 # LOAD DATASET
@@ -48,7 +52,7 @@ with open("dataset.json", "r", encoding="utf-8") as f:
     dataset = json.load(f)
 
 # ==============================
-# EXTRAÇÃO
+# NORMALIZAÇÃO
 # ==============================
 
 def extract(text):
@@ -57,28 +61,40 @@ def extract(text):
 
     text = text.lower()
 
-    if "sql injection" in text:
+    if any(x in text for x in ["sql injection", "sqli"]):
         return "SQL Injection"
-    if "xss" in text or "cross site scripting" in text:
+
+    if any(x in text for x in ["xss", "cross site scripting", "cross-site scripting"]):
         return "XSS"
-    if "command injection" in text:
+
+    if any(x in text for x in ["command injection", "os command"]):
         return "Command Injection"
-    if "path traversal" in text:
+
+    if any(x in text for x in ["path traversal", "directory traversal"]):
         return "Path Traversal"
 
     return "None"
 
 # ==============================
-# CALLS
+# REQUEST COM RETRY
 # ==============================
 
 def safe_request(url, headers, body):
-    response = requests.post(url, headers=headers, json=body, timeout=TIMEOUT)
-    response.raise_for_status()
-    return response.json()
+    for attempt in range(RETRIES):
+        try:
+            response = requests.post(url, headers=headers, json=body, timeout=TIMEOUT)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            if attempt == RETRIES - 1:
+                raise e
+            time.sleep(1)
 
+# ==============================
+# PROVIDERS
+# ==============================
 
-def call_openai(provider, code):
+def call_mistral(provider, code):
     json_resp = safe_request(
         provider["url"],
         {
@@ -95,39 +111,27 @@ def call_openai(provider, code):
     return json_resp.get("choices", [{}])[0].get("message", {}).get("content", "")
 
 
-def call_openrouter(provider, code):
-    json_resp = safe_request(
-        provider["url"],
-        {
-            "Authorization": f"Bearer {provider['api_key']}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "http://localhost",
-            "X-Title": "benchmark"
-        },
-        {
-            "model": provider["model"],
-            "messages": [{"role": "user", "content": f"{PROMPT}\n{code}"}]
-        }
-    )
-
-    return json_resp.get("choices", [{}])[0].get("message", {}).get("content", "")
-
-
 def call_ollama(provider, code):
     json_resp = safe_request(
         provider["url"],
         {},
         {
             "model": provider["model"],
-            "prompt": f"{PROMPT}\n{code}",
+            "messages": [
+                {"role": "user", "content": f"{PROMPT}\n{code}"}
+            ],
             "stream": False
         }
     )
 
-    return json_resp.get("response", "")
+    return (
+        json_resp.get("message", {}).get("content") or
+        json_resp.get("response") or
+        ""
+    )
 
 # ==============================
-# METRICS
+# MÉTRICAS
 # ==============================
 
 def compute_metrics(confusion):
@@ -159,8 +163,8 @@ def run_benchmark():
 
     for name, provider in PROVIDERS.items():
 
-        if provider["api_key"] is None and provider["type"] != "ollama":
-            print(f"Skipping {name} (no API key)")
+        if provider["type"] != "ollama" and not provider.get("api_key"):
+            print(f"⚠️ Skipping {name} (no API key)")
             continue
 
         print(f"\n=== TESTING {name.upper()} ===")
@@ -168,27 +172,32 @@ def run_benchmark():
         confusion = defaultdict(lambda: defaultdict(int))
         total_time = 0
         correct = 0
+        valid = 0
 
         for i, test in enumerate(dataset):
-            code = test["code"]
-            expected = test["expected"][0]
 
-            start = time.time()
+            code = test["code"]
+
+            expected = test["expected"]
+            if isinstance(expected, list):
+                expected = expected[0]
 
             try:
+                start = time.time()
+
                 if provider["type"] == "openai":
-                    response = call_openai(provider, code)
-                elif provider["type"] == "openrouter":
-                    response = call_openrouter(provider, code)
+                    response = call_mistral(provider, code)
                 else:
                     response = call_ollama(provider, code)
+
+                latency = time.time() - start
 
             except Exception as e:
                 print(f"[{i+1}] ERROR: {e}")
                 continue
 
-            latency = time.time() - start
             total_time += latency
+            valid += 1
 
             predicted = extract(response)
 
@@ -199,9 +208,8 @@ def run_benchmark():
 
             print(f"[{i+1}] {expected} -> {predicted} ({latency:.2f}s)")
 
-        total = len(dataset)
-        accuracy = correct / total if total else 0
-        avg_latency = total_time / total if total else 0
+        accuracy = correct / valid if valid else 0
+        avg_latency = total_time / valid if valid else 0
 
         results[name] = {
             "accuracy": accuracy,
@@ -216,28 +224,26 @@ def run_benchmark():
 # GRÁFICOS
 # ==============================
 
-def plot_overall(results):
+def plot_all(results):
+
     providers = list(results.keys())
 
-    acc = [results[p]["accuracy"] for p in providers]
-    lat = [results[p]["avg_latency"] for p in providers]
-
+    # Accuracy
     plt.figure()
-    plt.bar(providers, acc)
+    plt.bar(providers, [results[p]["accuracy"] for p in providers])
     plt.title("Accuracy")
     plt.savefig("accuracy.png")
     plt.close()
 
+    # Latência
     plt.figure()
-    plt.bar(providers, lat)
-    plt.title("Latency")
+    plt.bar(providers, [results[p]["avg_latency"] for p in providers])
+    plt.title("Latency (s)")
     plt.savefig("latency.png")
     plt.close()
 
-
-def plot_f1(results):
+    # F1
     rows = []
-
     for provider, data in results.items():
         for label, m in data["metrics"].items():
             rows.append({
@@ -251,11 +257,11 @@ def plot_f1(results):
     plt.figure()
     sns.barplot(data=df, x="Label", y="F1", hue="Provider")
     plt.xticks(rotation=30)
+    plt.title("F1 per Vulnerability")
     plt.savefig("f1_score.png")
     plt.close()
 
-
-def plot_confusion(results):
+    # Confusion matrix
     for provider, data in results.items():
         matrix = [
             [data["confusion"][a][b] for b in LABELS]
@@ -271,7 +277,7 @@ def plot_confusion(results):
         plt.close()
 
 # ==============================
-# SAVE CSV
+# CSV
 # ==============================
 
 def save_results(results):
@@ -290,7 +296,7 @@ def save_results(results):
                 ])
 
 # ==============================
-# EXECUTE
+# MAIN
 # ==============================
 
 if __name__ == "__main__":
@@ -305,9 +311,6 @@ if __name__ == "__main__":
         print(f"Latency: {data['avg_latency']:.2f}s")
 
     save_results(results)
+    plot_all(results)
 
-    plot_overall(results)
-    plot_f1(results)
-    plot_confusion(results)
-
-    print("\n✔ Benchmark finalizado com gráficos")
+    print("\nBenchmark finalizado com sucesso")
