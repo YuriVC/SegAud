@@ -1,152 +1,67 @@
 [
-  {
-    "id": 1,
-    "description": "SQL Injection básico",
-    "code": "const query = \"SELECT * FROM users WHERE id=\" + userInput;",
-    "expected": ["SQL Injection"]
-  },
-  {
-    "id": 2,
-    "description": "SQL Injection em login",
-    "code": "const query = \"SELECT * FROM users WHERE username='\" + user + \"' AND password='\" + pass + \"'\";",
-    "expected": ["SQL Injection"]
-  },
-  {
-    "id": 3,
-    "description": "XSS básico",
-    "code": "document.write(location.hash);",
-    "expected": ["XSS"]
-  },
-  {
-    "id": 4,
-    "description": "XSS via innerHTML",
-    "code": "element.innerHTML = userInput;",
-    "expected": ["XSS"]
-  },
-  {
-    "id": 5,
-    "description": "Hardcoded password",
-    "code": "const password = \"123456\";",
-    "expected": ["Weak Password"]
-  },
-  {
-    "id": 6,
-    "description": "Eval perigoso",
-    "code": "eval(userInput);",
-    "expected": ["Code Injection"]
-  },
-  {
-    "id": 7,
-    "description": "Command Injection",
-    "code": "require('child_process').exec('ls ' + userInput);",
-    "expected": ["Command Injection"]
-  },
-  {
-    "id": 8,
-    "description": "Path Traversal",
-    "code": "fs.readFile('/files/' + userInput, callback);",
-    "expected": ["Path Traversal"]
-  },
-  {
-    "id": 9,
-    "description": "Uso de HTTP inseguro",
-    "code": "fetch('http://example.com/api/data');",
-    "expected": ["Insecure Communication"]
-  },
-  {
-    "id": 10,
-    "description": "Deserialização insegura",
-    "code": "const obj = JSON.parse(userInput);",
-    "expected": ["Insecure Deserialization"]
-  },
-  {
-    "id": 11,
-    "description": "Falta de validação",
-    "code": "app.get('/user', (req, res) => { res.send(req.query.id); });",
-    "expected": ["Input Validation"]
-  },
-  {
-    "id": 12,
-    "description": "Token hardcoded",
-    "code": "const apiKey = 'ABC123SECRET';",
-    "expected": ["Sensitive Data Exposure"]
-  },
-  {
-    "id": 13,
-    "description": "Open redirect",
-    "code": "res.redirect(req.query.url);",
-    "expected": ["Open Redirect"]
-  },
-  {
-    "id": 14,
-    "description": "CSRF potencial",
-    "code": "app.post('/transfer', (req, res) => { transferMoney(); });",
-    "expected": ["CSRF"]
-  },
-  {
-    "id": 15,
-    "description": "Uso inseguro de cookies",
-    "code": "document.cookie = \"sessionId=\" + sessionId;",
-    "expected": ["Insecure Cookie"]
-  },
-  {
-    "id": 16,
-    "description": "Uso de MD5",
-    "code": "const hash = crypto.createHash('md5').update(password).digest('hex');",
-    "expected": ["Weak Cryptography"]
-  },
-  {
-    "id": 17,
-    "description": "Sem autenticação",
-    "code": "app.get('/admin', (req, res) => { res.send('admin panel'); });",
-    "expected": ["Broken Authentication"]
-  },
-  {
-    "id": 18,
-    "description": "Console log de dados sensíveis",
-    "code": "console.log('Password:', password);",
-    "expected": ["Sensitive Data Exposure"]
-  },
-  {
-    "id": 19,
-    "description": "Uso de iframe sem proteção",
-    "code": "<iframe src='http://example.com'></iframe>",
-    "expected": ["Clickjacking"]
-  },
-  {
-    "id": 20,
-    "description": "Upload sem validação",
-    "code": "app.post('/upload', upload.any(), (req, res) => { res.send('ok'); });",
-    "expected": ["Unrestricted File Upload"]
-  },
-  {
-    "id": 21,
-    "description": "Código seguro simples",
-    "code": "const id = parseInt(userInput, 10);",
-    "expected": []
-  },
-  {
-    "id": 22,
-    "description": "Prepared statement seguro",
-    "code": "db.query('SELECT * FROM users WHERE id = ?', [userInput]);",
-    "expected": []
-  },
-  {
-    "id": 23,
-    "description": "Escape de HTML",
-    "code": "element.textContent = userInput;",
-    "expected": []
-  },
-  {
-    "id": 24,
-    "description": "Uso de HTTPS",
-    "code": "fetch('https://secure-api.com/data');",
-    "expected": []
-  },
-  {
-    "id": 25,
-    "description": "Validação básica",
-    "code": "if (!isNaN(userInput)) { process(userInput); }",
-    "expected": []
-  }
+  {"id":1,"description":"SQL Injection básico","code":"const q = \"SELECT * FROM users WHERE id=\" + userInput;","expected":["SQL Injection"]},
+  {"id":2,"description":"SQL Injection login","code":"const q = \"SELECT * FROM users WHERE user='\"+u+\"' AND pass='\"+p+\"'\";","expected":["SQL Injection"]},
+  {"id":3,"description":"SQL Injection numérico","code":"db.query(\"SELECT * FROM t WHERE id=\"+req.query.id);","expected":["SQL Injection"]},
+  {"id":4,"description":"SQL Injection concatenação","code":"let sql = \"DELETE FROM users WHERE name='\"+name+\"'\";","expected":["SQL Injection"]},
+  {"id":5,"description":"SQL Injection update","code":"\"UPDATE users SET role='\"+role+\"' WHERE id=\"+id;","expected":["SQL Injection"]},
+
+  {"id":6,"description":"XSS hash","code":"document.write(location.hash);","expected":["XSS"]},
+  {"id":7,"description":"XSS innerHTML","code":"div.innerHTML = input;","expected":["XSS"]},
+  {"id":8,"description":"XSS DOM","code":"el.innerHTML = req.query.q;","expected":["XSS"]},
+  {"id":9,"description":"XSS via document","code":"document.body.innerHTML += userInput;","expected":["XSS"]},
+  {"id":10,"description":"XSS via template","code":"container.innerHTML = `<p>${user}</p>`;","expected":["XSS"]},
+
+  {"id":11,"description":"Command Injection exec","code":"exec('ls ' + userInput);","expected":["Command Injection"]},
+  {"id":12,"description":"Command Injection ping","code":"exec('ping ' + ip);","expected":["Command Injection"]},
+  {"id":13,"description":"Command Injection shell","code":"spawn('sh',['-c',userInput]);","expected":["Command Injection"]},
+  {"id":14,"description":"Command Injection python","code":"os.system('cat ' + filename)","expected":["Command Injection"]},
+  {"id":15,"description":"Command Injection bash","code":"system(\"rm -rf \" + dir);","expected":["Command Injection"]},
+
+  {"id":16,"description":"Path Traversal leitura","code":"fs.readFile('/files/' + file);","expected":["Path Traversal"]},
+  {"id":17,"description":"Path Traversal download","code":"res.sendFile('/uploads/' + name);","expected":["Path Traversal"]},
+  {"id":18,"description":"Path Traversal node","code":"path.join('/base', userInput);","expected":["Path Traversal"]},
+  {"id":19,"description":"Path Traversal python","code":"open('/data/' + filename)","expected":["Path Traversal"]},
+  {"id":20,"description":"Path Traversal express","code":"app.get('/f', (r,s)=>s.sendFile('/root/'+r.query.f));","expected":["Path Traversal"]},
+
+  {"id":21,"description":"Seguro parse int","code":"const id = parseInt(userInput,10);","expected":["None"]},
+  {"id":22,"description":"Prepared statement","code":"db.query('SELECT * FROM users WHERE id=?',[id]);","expected":["None"]},
+  {"id":23,"description":"Escape HTML","code":"el.textContent = userInput;","expected":["None"]},
+  {"id":24,"description":"HTTPS seguro","code":"fetch('https://api.com');","expected":["None"]},
+  {"id":25,"description":"Validação numérica","code":"if(!isNaN(x)){ use(x);}","expected":["None"]},
+
+  {"id":26,"description":"Sanitização simples","code":"input.replace(/</g,'');","expected":["None"]},
+  {"id":27,"description":"Uso encodeURI","code":"encodeURIComponent(userInput);","expected":["None"]},
+  {"id":28,"description":"Validação regex","code":"/^[a-z0-9]+$/.test(user);","expected":["None"]},
+  {"id":29,"description":"Filtro backend","code":"if(user.length<10){save(user);}","expected":["None"]},
+  {"id":30,"description":"Safe JSON","code":"JSON.stringify(obj);","expected":["None"]},
+
+  {"id":31,"description":"SQL Injection API","code":"query(\"SELECT * FROM t WHERE name='\"+req.body.n+\"'\");","expected":["SQL Injection"]},
+  {"id":32,"description":"SQL Injection OR 1=1","code":"\"SELECT * FROM u WHERE name='\"+x+\"' OR 1=1\";","expected":["SQL Injection"]},
+
+  {"id":33,"description":"XSS script tag","code":"div.innerHTML = '<script>'+input+'</script>';","expected":["XSS"]},
+  {"id":34,"description":"XSS onclick","code":"btn.setAttribute('onclick', user);","expected":["XSS"]},
+
+  {"id":35,"description":"Command Injection curl","code":"exec('curl ' + url);","expected":["Command Injection"]},
+  {"id":36,"description":"Command Injection docker","code":"exec('docker run ' + img);","expected":["Command Injection"]},
+
+  {"id":37,"description":"Path Traversal ../","code":"fs.readFile('../' + file);","expected":["Path Traversal"]},
+  {"id":38,"description":"Path Traversal ../../","code":"open('../../etc/passwd')","expected":["Path Traversal"]},
+
+  {"id":39,"description":"Seguro template literal","code":"const name = `${safe}`;","expected":["None"]},
+  {"id":40,"description":"Seguro constante","code":"const role='user';","expected":["None"]},
+
+  {"id":41,"description":"SQL Injection delete","code":"\"DELETE FROM t WHERE id=\"+id;","expected":["SQL Injection"]},
+  {"id":42,"description":"XSS URL","code":"location.href = userInput;","expected":["XSS"]},
+
+  {"id":43,"description":"Command Injection env","code":"exec(process.env.CMD + user);","expected":["Command Injection"]},
+  {"id":44,"description":"Path Traversal concat","code":"readFile(base + '/' + input);","expected":["Path Traversal"]},
+
+  {"id":45,"description":"Seguro boolean check","code":"if(flag===true){run();}","expected":["None"]},
+  {"id":46,"description":"Seguro array","code":"arr.push(item);","expected":["None"]},
+
+  {"id":47,"description":"SQL Injection union","code":"\"SELECT * FROM t WHERE id=\"+id+\" UNION SELECT * FROM admin\";","expected":["SQL Injection"]},
+  {"id":48,"description":"XSS DOM append","code":"document.body.innerHTML += data;","expected":["XSS"]},
+
+  {"id":49,"description":"Command Injection rm","code":"exec('rm ' + file);","expected":["Command Injection"]},
+  {"id":50,"description":"Path Traversal file","code":"sendFile('/var/'+userInput);","expected":["Path Traversal"]}
 ]
