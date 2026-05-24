@@ -1,316 +1,449 @@
 import requests
-import json
-import time
-import csv
+import yaml
 import os
+import re
+import subprocess
+import time
 from collections import defaultdict
 
-import matplotlib.pyplot as plt
-import seaborn as sns
 import pandas as pd
+import matplotlib.pyplot as plt
 
-# ==============================
+# =====================================
+# BASE DIR
+# =====================================
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# =====================================
 # CONFIG
-# ==============================
+# =====================================
 
-TIMEOUT = 30
-RETRIES = 2
+OLLAMA_URL = "http://localhost:11434/api/chat"
+
+TIMEOUT = 300
+
+LANGUAGE = "English"
 
 PROMPT = (
-    "Detect vulnerabilities in this code and return ONLY the vulnerability type "
-    "(SQL Injection, XSS, Command Injection, Path Traversal or None)."
+    "Detecte vulnerabilidades no código e diga o tipo:"
+    if LANGUAGE == "Português (BR)"
+    else "Detect vulnerabilities in the code and say the type:"
 )
 
-LABELS = ["SQL Injection", "XSS", "Command Injection", "Path Traversal", "None"]
+MODELS = [
 
-PROVIDERS = {
-    "mistral": {
-        "url": "https://api.mistral.ai/v1/chat/completions",
-        "api_key": os.getenv("MISTRAL_API_KEY"),
-        "model": "mistral-small",
-        "type": "openai"
-    },
-    "ollama": {
-        "url": "http://localhost:11434/api/chat",
-        "api_key": None,
-        "model": "llama3",
-        "type": "ollama"
-    },
-    "gemma": {
-        "url": "http://localhost:11434/api/chat",
-        "api_key": None,
-        "model": "gemma3",
-        "type": "ollama"
-    }
-}
+    "granite4.1:3b",
+    "gemma4:latest",
+    "falcon3:latest",
+    "deepseek-coder:latest",
+    "yi-coder:latest",
+    "stable-code:latest",
+    "laguna-xs.2:latest",
+    "exaone-deep:latest"
+]
 
-# ==============================
-# LOAD DATASET
-# ==============================
+# =====================================
+# LOAD TESTS
+# =====================================
 
-with open("dataset.json", "r", encoding="utf-8") as f:
-    dataset = json.load(f)
+def load_yaml_tests():
 
-# ==============================
-# NORMALIZAÇÃO
-# ==============================
-
-def extract(text):
-    if not text:
-        return "None"
-
-    text = text.lower()
-
-    if any(x in text for x in ["sql injection", "sqli"]):
-        return "SQL Injection"
-
-    if any(x in text for x in ["xss", "cross site scripting", "cross-site scripting"]):
-        return "XSS"
-
-    if any(x in text for x in ["command injection", "os command"]):
-        return "Command Injection"
-
-    if any(x in text for x in ["path traversal", "directory traversal"]):
-        return "Path Traversal"
-
-    return "None"
-
-# ==============================
-# REQUEST COM RETRY
-# ==============================
-
-def safe_request(url, headers, body):
-    for attempt in range(RETRIES):
-        try:
-            response = requests.post(url, headers=headers, json=body, timeout=TIMEOUT)
-            response.raise_for_status()
-            return response.json()
-        except Exception as e:
-            if attempt == RETRIES - 1:
-                raise e
-            time.sleep(1)
-
-# ==============================
-# PROVIDERS
-# ==============================
-
-def call_mistral(provider, code):
-    json_resp = safe_request(
-        provider["url"],
-        {
-            "Authorization": f"Bearer {provider['api_key']}",
-            "Content-Type": "application/json"
-        },
-        {
-            "model": provider["model"],
-            "messages": [{"role": "user", "content": f"{PROMPT}\n{code}"}],
-            "temperature": 0
-        }
+    file = os.path.join(
+        BASE_DIR,
+        "security_php.yaml"
     )
 
-    return json_resp.get("choices", [{}])[0].get("message", {}).get("content", "")
+    if not os.path.exists(file):
 
+        print(f"[ERROR] File not found: {file}")
 
-def call_ollama(provider, code):
-    json_resp = safe_request(
-        provider["url"],
-        {},
-        {
-            "model": provider["model"],
+        return []
+
+    with open(file, "r", encoding="utf-8") as f:
+
+        data = yaml.safe_load(f)
+
+    tests = []
+
+    if isinstance(data, list):
+
+        for item in data:
+
+            tests.append({
+
+                "id": item.get("id", "unknown"),
+
+                "prompt": item.get("prompt", ""),
+
+                "criteria": item.get("criteria", []),
+
+                "must_not": item.get("must_not", [])
+            })
+
+    return tests
+
+# =====================================
+# UNLOAD MODEL
+# =====================================
+
+def unload_model(model):
+
+    try:
+
+        subprocess.run(
+            ["ollama", "stop", model],
+            capture_output=True
+        )
+
+        print(f"[INFO] Unloaded model: {model}")
+
+    except Exception as e:
+
+        print(f"[WARNING] Could not unload {model}: {e}")
+
+# =====================================
+# OLLAMA REQUEST
+# =====================================
+
+def call_model(model, code_prompt):
+
+    full_prompt = (
+        PROMPT +
+        "\n\n" +
+        code_prompt
+    )
+
+    response = requests.post(
+
+        OLLAMA_URL,
+
+        json={
+
+            "model": model,
+
             "messages": [
-                {"role": "user", "content": f"{PROMPT}\n{code}"}
+                {
+                    "role": "user",
+                    "content": full_prompt
+                }
             ],
+
             "stream": False
-        }
+        },
+
+        timeout=TIMEOUT
     )
 
-    return (
-        json_resp.get("message", {}).get("content") or
-        json_resp.get("response") or
-        ""
+    response.raise_for_status()
+
+    data = response.json()
+
+    content = (
+        data.get("message", {})
+            .get("content", "")
+            .strip()
     )
 
-# ==============================
-# MÉTRICAS
-# ==============================
+    if not content:
+        return "[EMPTY_RESPONSE]"
 
-def compute_metrics(confusion):
-    metrics = {}
+    return content
 
-    for label in LABELS:
-        tp = confusion[label][label]
-        fp = sum(confusion[x][label] for x in LABELS if x != label)
-        fn = sum(confusion[label][x] for x in LABELS if x != label)
+# =====================================
+# VALIDATION
+# =====================================
 
-        precision = tp / (tp + fp) if (tp + fp) else 0
-        recall = tp / (tp + fn) if (tp + fn) else 0
-        f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) else 0
+def validate_response(response, criteria, must_not=None):
 
-        metrics[label] = {
-            "precision": precision,
-            "recall": recall,
-            "f1": f1
-        }
+    if not response:
+        return False
 
-    return metrics
+    response = response.lower()
 
-# ==============================
-# BENCHMARK
-# ==============================
+    positive_score = 0
+    negative_score = 0
 
-def run_benchmark():
-    results = {}
+    # =====================================
+    # POSITIVE MATCHES
+    # =====================================
 
-    for name, provider in PROVIDERS.items():
+    for pattern in criteria:
 
-        if provider["type"] != "ollama" and not provider.get("api_key"):
-            print(f"⚠️ Skipping {name} (no API key)")
-            continue
+        try:
 
-        print(f"\n=== TESTING {name.upper()} ===")
+            if re.search(
+                pattern,
+                response,
+                re.IGNORECASE
+            ):
 
-        confusion = defaultdict(lambda: defaultdict(int))
-        total_time = 0
-        correct = 0
-        valid = 0
+                positive_score += 1
 
-        for i, test in enumerate(dataset):
+        except:
+            pass
 
-            code = test["code"]
+    # =====================================
+    # NEGATIVE MATCHES
+    # =====================================
 
-            expected = test["expected"]
-            if isinstance(expected, list):
-                expected = expected[0]
+    if must_not:
+
+        for pattern in must_not:
 
             try:
-                start = time.time()
 
-                if provider["type"] == "openai":
-                    response = call_mistral(provider, code)
-                else:
-                    response = call_ollama(provider, code)
+                if re.search(
+                    pattern,
+                    response,
+                    re.IGNORECASE
+                ):
 
-                latency = time.time() - start
+                    negative_score += 1
 
-            except Exception as e:
-                print(f"[{i+1}] ERROR: {e}")
+            except:
+                pass
+
+    # =====================================
+    # FINAL SCORE
+    # =====================================
+
+    final_score = (
+        positive_score - negative_score
+    )
+
+    return final_score >= 1
+
+# =====================================
+# BENCHMARK
+# =====================================
+
+def run_benchmark():
+
+    tests = load_yaml_tests()
+
+    if not tests:
+
+        print("No tests found")
+
+        return {}
+
+    print(f"Loaded {len(tests)} tests")
+
+    results = {}
+
+    for model in MODELS:
+
+        print(f"\n=== TESTING {model.upper()} ===")
+
+        total = 0
+
+        correct = 0
+
+        category_stats = defaultdict(
+            lambda: {
+                "total": 0,
+                "correct": 0
+            }
+        )
+
+        for i, test in enumerate(tests):
+
+            prompt = test.get("prompt", "")
+
+            criteria = test.get("criteria", [])
+
+            must_not = test.get("must_not", [])
+
+            category = test.get("id", "unknown")
+
+            if not prompt:
                 continue
 
-            total_time += latency
-            valid += 1
+            total += 1
 
-            predicted = extract(response)
+            category_stats[category]["total"] += 1
 
-            confusion[expected][predicted] += 1
+            try:
 
-            if predicted == expected:
-                correct += 1
+                response = call_model(
+                    model,
+                    prompt
+                )
 
-            print(f"[{i+1}] {expected} -> {predicted} ({latency:.2f}s)")
+                print("\n---------------------------")
+                print(f"MODEL: {model}")
+                print(f"TEST : {category}")
+                print("RESPONSE:")
+                print(response[:1500])
+                print("---------------------------\n")
 
-        accuracy = correct / valid if valid else 0
-        avg_latency = total_time / valid if valid else 0
+                ok = validate_response(
+                    response,
+                    criteria,
+                    must_not
+                )
 
-        results[name] = {
+                if ok:
+
+                    correct += 1
+
+                    category_stats[category]["correct"] += 1
+
+                print(
+
+                    f"[{i+1}/{len(tests)}] "
+                    f"{category} -> "
+                    f"{'PASS' if ok else 'FAIL'}"
+                )
+
+            except Exception as e:
+
+                print(
+                    f"[{i+1}/{len(tests)}] "
+                    f"ERROR ({model}): {e}"
+                )
+
+        accuracy = (
+            correct / total
+            if total else 0
+        )
+
+        results[model] = {
+
             "accuracy": accuracy,
-            "avg_latency": avg_latency,
-            "metrics": compute_metrics(confusion),
-            "confusion": confusion
+
+            "categories": category_stats
         }
+
+        unload_model(model)
+
+        time.sleep(2)
 
     return results
 
-# ==============================
-# GRÁFICOS
-# ==============================
+# =====================================
+# SAVE CSV
+# =====================================
 
-def plot_all(results):
+def save_csv(results):
 
-    providers = list(results.keys())
-
-    # Accuracy
-    plt.figure()
-    plt.bar(providers, [results[p]["accuracy"] for p in providers])
-    plt.title("Accuracy")
-    plt.savefig("accuracy.png")
-    plt.close()
-
-    # Latência
-    plt.figure()
-    plt.bar(providers, [results[p]["avg_latency"] for p in providers])
-    plt.title("Latency (s)")
-    plt.savefig("latency.png")
-    plt.close()
-
-    # F1
     rows = []
-    for provider, data in results.items():
-        for label, m in data["metrics"].items():
+
+    for model, data in results.items():
+
+        rows.append({
+
+            "Model": model,
+
+            "Category": "OVERALL",
+
+            "Accuracy": round(
+                data["accuracy"],
+                6
+            )
+        })
+
+        for category, stats in data[
+            "categories"
+        ].items():
+
+            total = stats["total"]
+
+            correct = stats["correct"]
+
+            acc = (
+                correct / total
+                if total else 0
+            )
+
             rows.append({
-                "Provider": provider,
-                "Label": label,
-                "F1": m["f1"]
+
+                "Model": model,
+
+                "Category": category,
+
+                "Accuracy": round(acc, 6)
             })
 
     df = pd.DataFrame(rows)
 
-    plt.figure()
-    sns.barplot(data=df, x="Label", y="F1", hue="Provider")
-    plt.xticks(rotation=30)
-    plt.title("F1 per Vulnerability")
-    plt.savefig("f1_score.png")
-    plt.close()
+    output = os.path.join(
+        BASE_DIR,
+        "benchmark_results.csv"
+    )
 
-    # Confusion matrix
-    for provider, data in results.items():
-        matrix = [
-            [data["confusion"][a][b] for b in LABELS]
-            for a in LABELS
-        ]
+    df.to_csv(
+        output,
+        index=False
+    )
 
-        df = pd.DataFrame(matrix, index=LABELS, columns=LABELS)
+    print(f"\nCSV saved: {output}")
 
-        plt.figure()
-        sns.heatmap(df, annot=True, fmt="d")
-        plt.title(provider)
-        plt.savefig(f"confusion_{provider}.png")
-        plt.close()
+# =====================================
+# PLOT
+# =====================================
 
-# ==============================
-# CSV
-# ==============================
+def plot_results(results):
 
-def save_results(results):
-    with open("results.csv", "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["Provider", "Label", "Precision", "Recall", "F1"])
+    models = []
 
-        for provider, data in results.items():
-            for label, m in data["metrics"].items():
-                writer.writerow([
-                    provider,
-                    label,
-                    round(m["precision"], 4),
-                    round(m["recall"], 4),
-                    round(m["f1"], 4)
-                ])
+    accuracy = []
 
-# ==============================
+    for model, data in results.items():
+
+        models.append(model)
+
+        accuracy.append(data["accuracy"])
+
+    plt.figure(figsize=(14, 7))
+
+    plt.bar(models, accuracy)
+
+    plt.xticks(rotation=25)
+
+    plt.ylabel("Accuracy")
+
+    plt.title(
+        "LLM Security Benchmark - PHP"
+    )
+
+    plt.tight_layout()
+
+    output = os.path.join(
+        BASE_DIR,
+        "benchmark_accuracy.png"
+    )
+
+    plt.savefig(output)
+
+    print(f"Graph saved: {output}")
+
+# =====================================
 # MAIN
-# ==============================
+# =====================================
 
 if __name__ == "__main__":
+
+    print(
+        "Loading PHP security tests..."
+    )
 
     results = run_benchmark()
 
     print("\n=== FINAL RESULTS ===")
 
-    for provider, data in results.items():
-        print(f"\n{provider.upper()}")
-        print(f"Accuracy: {data['accuracy']:.2f}")
-        print(f"Latency: {data['avg_latency']:.2f}s")
+    for model, data in results.items():
 
-    save_results(results)
-    plot_all(results)
+        print(f"\n{model.upper()}")
 
-    print("\nBenchmark finalizado com sucesso")
+        print(
+            f"Accuracy: "
+            f"{data['accuracy']:.6f}"
+        )
+
+    save_csv(results)
+
+    plot_results(results)
+
+    print("\nBenchmark finished successfully")
