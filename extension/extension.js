@@ -7,7 +7,8 @@ function activate(context) {
 
     const disposable = vscode.commands.registerCommand(
         'mn-analise.analyzeCodeCommand',
-        () => {
+        async () => {
+
             const editor = vscode.window.activeTextEditor;
 
             if (!editor) {
@@ -15,10 +16,11 @@ function activate(context) {
                 return;
             }
 
-            const code = editor.document.getText(editor.selection)
-                || editor.document.getText();
+            const code =
+                editor.document.getText(editor.selection) ||
+                editor.document.getText();
 
-            service.analyze(code);
+            await service.analyze(code);
         }
     );
 

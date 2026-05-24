@@ -1,63 +1,97 @@
 {
   "name": "mn-analise",
-  "displayName": "mn-analise-yuri",
-  "publisher": "Yuri Viana",
-  "description": "AI code analyzer with multiple providers",
-  "version": "6.0.0",
+  "displayName": "MN Analise",
+  "description": "AI-powered vulnerability analyzer",
+  "version": "1.0.0",
+  "publisher": "yuriviana",
+
   "engines": {
-    "vscode": "^1.84.0"
+    "vscode": "^1.118.0"
   },
-  "categories": ["Other"],
+
+  "categories": [
+    "Other",
+    "Machine Learning"
+  ],
+
+  "activationEvents": [
+    "onCommand:mn-analise.analyzeCodeCommand"
+  ],
+
   "main": "./extension.js",
 
   "contributes": {
+
     "commands": [
       {
         "command": "mn-analise.analyzeCodeCommand",
-        "title": "Search vulnerabilities"
+        "title": "Analyze Code"
       }
     ],
 
     "configuration": {
-      "title": "MN-Analise",
+
+      "title": "MN Analise",
+
       "properties": {
 
-        "mn-analise.01.language": {
+        "mn.provider": {
           "type": "string",
-          "default": "English",
-          "enum": ["English", "Português (BR)"]
+          "default": "deepseek-coder",
+
+          "enum": [
+            "devstral",
+            "granite4.1",
+            "laguna-xs.2",
+            "qwen3.6",
+            "gemma4",
+            "falcon3",
+            "deepseek-coder",
+            "exaone-deep",
+            "yi-coder",
+            "stable-code"
+          ],
+
+          "description": "AI Provider"
         },
 
-        "mn-analise.02.aiProvider": {
+        "mn.endpoint": {
           "type": "string",
-          "default": "ollama",
-          "enum": ["ollama", "anthropic", "mistral", "gemma"]
+          "default": "http://localhost:11434/api/chat",
+          "description": "API endpoint"
         },
 
-        "mn-analise.03.anthropicApiKey": {
+        "mn.apiKey": {
           "type": "string",
-          "default": ""
+          "default": "",
+          "description": "API key"
         },
 
-        "mn-analise.04.mistralApiKey": {
+        "mn.model": {
           "type": "string",
-          "default": ""
-        },
 
-        "mn-analise.05.ollamaModel": {
-          "type": "string",
-          "default": "llama3"
-        },
+          "default": "deepseek-coder",
 
-        "mn-analise.06.ollamaEndpoint": {
-          "type": "string",
-          "default": "http://localhost:11434/api/generate"
+          "enum": [
+            "devstral",
+            "granite-4.1",
+            "laguna-xs",
+            "qwen3.6",
+            "gemma3",
+            "falcon3",
+            "deepseek-coder",
+            "exaone-deep",
+            "yi-coder",
+            "stable-code"
+          ],
+
+          "description": "Model name"
         }
       }
     }
   },
 
   "dependencies": {
-    "node-fetch": "^3.3.2"
+    "node-fetch": "^2.7.0"
   }
 }
