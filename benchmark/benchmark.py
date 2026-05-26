@@ -103,7 +103,7 @@ def unload_model(model):
         print(f"[WARNING] Could not unload {model}: {e}")
 
 # =====================================
-# OLLAMA REQUEST
+# MODEL REQUEST
 # =====================================
 
 def call_model(model, code_prompt):
@@ -154,18 +154,48 @@ def call_model(model, code_prompt):
 # VALIDATION
 # =====================================
 
-def validate_response(response, criteria, must_not=None):
+SOFT_FALSE_POSITIVES = [
+
+    r"\bsafe\b",
+
+    r"whitelist.*function",
+
+    r"allowed.*files"
+]
+
+DEFENSIVE_CONTEXT = [
+
+    "safe coding",
+
+    "safe handling",
+
+    "safe implementation",
+
+    "safe practice",
+
+    "safe practices",
+
+    "safe functions",
+
+    "safe method",
+
+    "safe methods"
+]
+
+def evaluate_response(response, criteria, must_not=None):
 
     if not response:
-        return False
 
-    response = response.lower()
+        return False, 0, 0, 1
 
-    positive_score = 0
-    negative_score = 0
+    response_lower = response.lower()
+
+    tp = 0
+    fp = 0
+    fn = 0
 
     # =====================================
-    # POSITIVE MATCHES
+    # TRUE POSITIVE / FALSE NEGATIVE
     # =====================================
 
     for pattern in criteria:
@@ -178,13 +208,17 @@ def validate_response(response, criteria, must_not=None):
                 re.IGNORECASE
             ):
 
-                positive_score += 1
+                tp += 1
+
+            else:
+
+                fn += 1
 
         except:
             pass
 
     # =====================================
-    # NEGATIVE MATCHES
+    # FALSE POSITIVE
     # =====================================
 
     if must_not:
@@ -199,7 +233,35 @@ def validate_response(response, criteria, must_not=None):
                     re.IGNORECASE
                 ):
 
-                    negative_score += 1
+                    # =========================
+                    # SAFE CONTEXT IGNORE
+                    # =========================
+
+                    if pattern == r"\bsafe\b":
+
+                        ignore = False
+
+                        for ctx in DEFENSIVE_CONTEXT:
+
+                            if ctx in response_lower:
+
+                                ignore = True
+                                break
+
+                        if ignore:
+                            continue
+
+                    # =========================
+                    # SOFT FALSE POSITIVE
+                    # =========================
+
+                    if pattern in SOFT_FALSE_POSITIVES:
+
+                        fp += 0.25
+
+                    else:
+
+                        fp += 1
 
             except:
                 pass
@@ -208,11 +270,46 @@ def validate_response(response, criteria, must_not=None):
     # FINAL SCORE
     # =====================================
 
-    final_score = (
-        positive_score - negative_score
+        total_criteria = len(criteria)
+
+        coverage = tp / total_criteria
+
+        score = (tp * 2) - fp
+
+        passed = (
+            score >= 2
+            and coverage >= 0.5
+) 
+        return passed, tp, fp, fn
+
+# =====================================
+# METRICS
+# =====================================
+
+def compute_metrics(tp, fp, fn):
+
+    precision = (
+        tp / (tp + fp)
+        if (tp + fp) > 0 else 0
     )
 
-    return final_score >= 1
+    recall = (
+        tp / (tp + fn)
+        if (tp + fn) > 0 else 0
+    )
+
+    f1 = (
+        2 * precision * recall /
+        (precision + recall)
+        if (precision + recall) > 0 else 0
+    )
+
+    accuracy = (
+        tp / (tp + fp + fn)
+        if (tp + fp + fn) > 0 else 0
+    )
+
+    return accuracy, precision, recall, f1
 
 # =====================================
 # BENCHMARK
@@ -226,26 +323,21 @@ def run_benchmark():
 
         print("No tests found")
 
-        return {}
+        return {}, {}
 
     print(f"Loaded {len(tests)} tests")
 
     results = {}
 
+    heatmap_data = defaultdict(dict)
+
     for model in MODELS:
 
         print(f"\n=== TESTING {model.upper()} ===")
 
-        total = 0
-
-        correct = 0
-
-        category_stats = defaultdict(
-            lambda: {
-                "total": 0,
-                "correct": 0
-            }
-        )
+        total_tp = 0
+        total_fp = 0
+        total_fn = 0
 
         for i, test in enumerate(tests):
 
@@ -260,10 +352,6 @@ def run_benchmark():
             if not prompt:
                 continue
 
-            total += 1
-
-            category_stats[category]["total"] += 1
-
             try:
 
                 response = call_model(
@@ -275,26 +363,31 @@ def run_benchmark():
                 print(f"MODEL: {model}")
                 print(f"TEST : {category}")
                 print("RESPONSE:")
-                print(response[:1500])
+                print(response[:1200])
                 print("---------------------------\n")
 
-                ok = validate_response(
+                passed, tp, fp, fn = evaluate_response(
                     response,
                     criteria,
                     must_not
                 )
 
-                if ok:
+                total_tp += tp
+                total_fp += fp
+                total_fn += fn
 
-                    correct += 1
-
-                    category_stats[category]["correct"] += 1
+                heatmap_data[model][category] = (
+                    1 if passed else 0
+                )
 
                 print(
-
                     f"[{i+1}/{len(tests)}] "
                     f"{category} -> "
-                    f"{'PASS' if ok else 'FAIL'}"
+                    f"{'PASS' if passed else 'FAIL'}"
+                )
+
+                print(
+                    f"TP={tp} FP={fp} FN={fn}"
                 )
 
             except Exception as e:
@@ -304,23 +397,36 @@ def run_benchmark():
                     f"ERROR ({model}): {e}"
                 )
 
-        accuracy = (
-            correct / total
-            if total else 0
+                heatmap_data[model][category] = 0
+
+        accuracy, precision, recall, f1 = compute_metrics(
+            total_tp,
+            total_fp,
+            total_fn
         )
 
         results[model] = {
 
             "accuracy": accuracy,
 
-            "categories": category_stats
+            "precision": precision,
+
+            "recall": recall,
+
+            "f1": f1,
+
+            "tp": total_tp,
+
+            "fp": total_fp,
+
+            "fn": total_fn
         }
 
         unload_model(model)
 
         time.sleep(2)
 
-    return results
+    return results, heatmap_data
 
 # =====================================
 # SAVE CSV
@@ -336,35 +442,32 @@ def save_csv(results):
 
             "Model": model,
 
-            "Category": "OVERALL",
-
             "Accuracy": round(
                 data["accuracy"],
                 6
-            )
+            ),
+
+            "Precision": round(
+                data["precision"],
+                6
+            ),
+
+            "Recall": round(
+                data["recall"],
+                6
+            ),
+
+            "F1": round(
+                data["f1"],
+                6
+            ),
+
+            "TP": data["tp"],
+
+            "FP": data["fp"],
+
+            "FN": data["fn"]
         })
-
-        for category, stats in data[
-            "categories"
-        ].items():
-
-            total = stats["total"]
-
-            correct = stats["correct"]
-
-            acc = (
-                correct / total
-                if total else 0
-            )
-
-            rows.append({
-
-                "Model": model,
-
-                "Category": category,
-
-                "Accuracy": round(acc, 6)
-            })
 
     df = pd.DataFrame(rows)
 
@@ -381,43 +484,221 @@ def save_csv(results):
     print(f"\nCSV saved: {output}")
 
 # =====================================
-# PLOT
+# BAR GRAPH
 # =====================================
 
-def plot_results(results):
+def plot_f1(results):
 
     models = []
-
-    accuracy = []
+    f1_scores = []
 
     for model, data in results.items():
 
         models.append(model)
 
-        accuracy.append(data["accuracy"])
+        f1_scores.append(data["f1"])
 
     plt.figure(figsize=(14, 7))
 
-    plt.bar(models, accuracy)
+    plt.bar(models, f1_scores)
 
     plt.xticks(rotation=25)
 
-    plt.ylabel("Accuracy")
+    plt.ylabel("F1 Score")
 
     plt.title(
-        "LLM Security Benchmark - PHP"
+        "LLM Security Benchmark - F1 Score"
     )
 
     plt.tight_layout()
 
     output = os.path.join(
         BASE_DIR,
-        "benchmark_accuracy.png"
+        "benchmark_f1.png"
     )
 
     plt.savefig(output)
 
-    print(f"Graph saved: {output}")
+    print(f"Saved: {output}")
+
+# =====================================
+# METRICS GRAPH
+# =====================================
+
+def plot_metrics(results):
+
+    df = pd.DataFrame(results).T
+
+    metrics = [
+        "accuracy",
+        "precision",
+        "recall",
+        "f1"
+    ]
+
+    plt.figure(figsize=(16, 8))
+
+    for metric in metrics:
+
+        plt.plot(
+            df.index,
+            df[metric],
+            marker="o",
+            label=metric.upper()
+        )
+
+    plt.xticks(rotation=25)
+
+    plt.ylabel("Score")
+
+    plt.title(
+        "LLM Security Benchmark Metrics"
+    )
+
+    plt.legend()
+
+    plt.tight_layout()
+
+    output = os.path.join(
+        BASE_DIR,
+        "benchmark_metrics.png"
+    )
+
+    plt.savefig(output)
+
+    print(f"Saved: {output}")
+
+# =====================================
+# HEATMAP
+# =====================================
+
+def plot_heatmap(heatmap_data):
+
+    df = pd.DataFrame(heatmap_data).T
+
+    plt.figure(figsize=(18, 8))
+
+    plt.imshow(
+        df,
+        aspect="auto"
+    )
+
+    plt.colorbar(label="PASS(1) / FAIL(0)")
+
+    plt.xticks(
+        range(len(df.columns)),
+        df.columns,
+        rotation=90
+    )
+
+    plt.yticks(
+        range(len(df.index)),
+        df.index
+    )
+
+    plt.title(
+        "Security Vulnerability Detection Heatmap"
+    )
+
+    plt.tight_layout()
+
+    output = os.path.join(
+        BASE_DIR,
+        "benchmark_heatmap.png"
+    )
+
+    plt.savefig(output)
+
+    print(f"Saved: {output}")
+
+# =====================================
+# RADAR CHART
+# =====================================
+
+def plot_radar(results):
+
+    metrics = [
+        "accuracy",
+        "precision",
+        "recall",
+        "f1"
+    ]
+
+    first_model = list(results.keys())[0]
+
+    values = [
+        results[first_model][m]
+        for m in metrics
+    ]
+
+    values += values[:1]
+
+    angles = [
+        n / float(len(metrics)) * 2 * 3.141592
+        for n in range(len(metrics))
+    ]
+
+    angles += angles[:1]
+
+    plt.figure(figsize=(8, 8))
+
+    ax = plt.subplot(111, polar=True)
+
+    ax.plot(
+        angles,
+        values,
+        linewidth=2
+    )
+
+    ax.fill(
+        angles,
+        values,
+        alpha=0.25
+    )
+
+    plt.xticks(
+        angles[:-1],
+        [m.upper() for m in metrics]
+    )
+
+    plt.title(
+        f"Radar Metrics - {first_model}"
+    )
+
+    output = os.path.join(
+        BASE_DIR,
+        "benchmark_radar.png"
+    )
+
+    plt.savefig(output)
+
+    print(f"Saved: {output}")
+
+# =====================================
+# RANKING
+# =====================================
+
+def print_ranking(results):
+
+    print("\n=== MODEL RANKING ===")
+
+    ranked = sorted(
+
+        results.items(),
+
+        key=lambda x: x[1]["f1"],
+
+        reverse=True
+    )
+
+    for i, (model, data) in enumerate(ranked):
+
+        print(
+
+            f"{i+1}. "
+            f"{model} "
+            f"F1={data['f1']:.6f}"
+        )
 
 # =====================================
 # MAIN
@@ -429,7 +710,7 @@ if __name__ == "__main__":
         "Loading PHP security tests..."
     )
 
-    results = run_benchmark()
+    results, heatmap_data = run_benchmark()
 
     print("\n=== FINAL RESULTS ===")
 
@@ -438,12 +719,37 @@ if __name__ == "__main__":
         print(f"\n{model.upper()}")
 
         print(
-            f"Accuracy: "
-            f"{data['accuracy']:.6f}"
+            f"Accuracy : {data['accuracy']:.6f}"
         )
+
+        print(
+            f"Precision: {data['precision']:.6f}"
+        )
+
+        print(
+            f"Recall   : {data['recall']:.6f}"
+        )
+
+        print(
+            f"F1 Score : {data['f1']:.6f}"
+        )
+
+        print(
+            f"TP={data['tp']} "
+            f"FP={data['fp']} "
+            f"FN={data['fn']}"
+        )
+
+    print_ranking(results)
 
     save_csv(results)
 
-    plot_results(results)
+    plot_f1(results)
+
+    plot_metrics(results)
+
+    plot_heatmap(heatmap_data)
+
+    plot_radar(results)
 
     print("\nBenchmark finished successfully")
