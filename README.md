@@ -8,7 +8,7 @@ Contatos: `maria.pacheco@aluno.cefet-rj.br`, `yuri.carvalho@aluno.cefet-rj.br`
 
 ## Objetivo
 
-O objetivo deste projeto é comparar modelos de linguagem open source na tarefa de identificar vulnerabilidades de segurança em trechos de código PHP. Para isso, o repositório reúne:
+O objetivo deste projeto é comparar modelos de linguagem open source disponíveis e executados localmente por meio do **Ollama** na tarefa de identificar vulnerabilidades de segurança em trechos de código PHP. Para isso, o repositório reúne:
 
 - uma suíte de testes com exemplos de código vulnerável;
 - um script de benchmark executado localmente via Ollama;
@@ -57,9 +57,9 @@ As categorias de vulnerabilidade incluem:
 
 O script `benchmark.py` executa cada caso de teste contra os modelos configurados, avalia as respostas com expressões regulares e consolida os resultados em métricas de desempenho.
 
-### Modelos Avaliados
+### Modelos Ollama Avaliados
 
-Os modelos configurados no benchmark são:
+Os modelos configurados no benchmark são modelos executados localmente via Ollama:
 
 - `granite4.1:3b`
 - `gemma4:latest`
