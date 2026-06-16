@@ -105,6 +105,183 @@ Antes de executar o benchmark, verifique se o Ollama está disponível em:
 http://localhost:11434/api/chat
 ```
 
+## Reprodutibilidade Automatizada
+
+O repositório inclui dois scripts `.sh` para preparar o ambiente de execução.
+
+### Como usar no Linux e macOS
+
+No Linux ou macOS, abra um terminal na raiz do repositório e execute:
+
+```bash
+bash setup_minimal_reproducibility.sh
+```
+
+Se quiser permitir a instalação automática do Ollama:
+
+```bash
+INSTALL_OLLAMA=1 bash setup_minimal_reproducibility.sh
+```
+
+Também é possível dar permissão de execução ao script e rodar diretamente:
+
+```bash
+chmod +x setup_minimal_reproducibility.sh
+./setup_minimal_reproducibility.sh
+```
+
+Para a reprodução completa no Linux ou macOS:
+
+```bash
+INSTALL_OLLAMA=1 PULL_MODELS=1 RUN_BENCHMARK=1 bash setup_reproducibility.sh
+```
+
+### Como usar no Windows
+
+No Windows, recomenda-se usar **Git Bash** ou **WSL**, pois os scripts foram escritos em Bash.
+
+Com Git Bash, abra o terminal na raiz do repositório e execute:
+
+```bash
+bash setup_minimal_reproducibility.sh
+```
+
+Para permitir a instalação automática do Ollama pelo `winget`:
+
+```bash
+INSTALL_OLLAMA=1 bash setup_minimal_reproducibility.sh
+```
+
+Se estiver usando PowerShell para chamar o Bash, defina as variáveis assim:
+
+```powershell
+$env:INSTALL_OLLAMA="1"
+bash setup_minimal_reproducibility.sh
+```
+
+Para rodar sem executar o benchmark no PowerShell:
+
+```powershell
+$env:RUN_BENCHMARK="0"
+bash setup_minimal_reproducibility.sh
+```
+
+Para limpar uma variável depois do uso no PowerShell:
+
+```powershell
+Remove-Item Env:INSTALL_OLLAMA
+Remove-Item Env:RUN_BENCHMARK
+```
+
+Para a reprodução completa no Windows via Git Bash:
+
+```bash
+INSTALL_OLLAMA=1 PULL_MODELS=1 RUN_BENCHMARK=1 bash setup_reproducibility.sh
+```
+
+No Windows via PowerShell:
+
+```powershell
+$env:INSTALL_OLLAMA="1"
+$env:PULL_MODELS="1"
+$env:RUN_BENCHMARK="1"
+bash setup_reproducibility.sh
+```
+
+### Reprodutibilidade mínima
+
+Para reproduzir o projeto com apenas um modelo, use:
+
+```bash
+bash setup_minimal_reproducibility.sh
+```
+
+Por padrão, esse script:
+
+- cria o ambiente virtual `.venv-minimal`;
+- instala as dependências Python do benchmark;
+- instala as dependências da extensão em `extension/`, se `npm` estiver disponível;
+- verifica o Ollama;
+- baixa o modelo `deepseek-coder:latest`;
+- executa o benchmark usando somente esse modelo.
+
+Para permitir que o script tente instalar o Ollama automaticamente:
+
+```bash
+INSTALL_OLLAMA=1 bash setup_minimal_reproducibility.sh
+```
+
+Para preparar o ambiente mínimo sem executar o benchmark:
+
+```bash
+RUN_BENCHMARK=0 bash setup_minimal_reproducibility.sh
+```
+
+Para trocar o modelo mínimo:
+
+```bash
+MINIMAL_MODEL=deepseek-coder:6.7b bash setup_minimal_reproducibility.sh
+```
+
+### Espaço em disco para reprodução mínima
+
+Estimativa recomendada para a reprodução mínima com `deepseek-coder:latest`:
+
+- modelo Ollama `deepseek-coder:latest`: aproximadamente **776 MB**, conforme a [biblioteca oficial do Ollama](https://ollama.com/library/deepseek-coder);
+- ambiente virtual Python e pacotes: aproximadamente **500 MB a 1 GB**;
+- dependências Node da extensão: normalmente menos de **100 MB**;
+- arquivos de saída do benchmark: poucos MB.
+
+Recomendação prática: reservar pelo menos **3 GB livres** para a reprodução mínima. Para evitar falhas por cache, logs, versões de pacotes e expansão temporária de downloads, **5 GB livres** é uma margem mais confortável.
+
+### Reprodutibilidade completa
+
+Para preparar o ambiente completo:
+
+```bash
+bash setup_reproducibility.sh
+```
+
+Para tentar instalar Ollama, baixar todos os modelos listados no benchmark e executar a avaliação completa:
+
+```bash
+INSTALL_OLLAMA=1 PULL_MODELS=1 RUN_BENCHMARK=1 bash setup_reproducibility.sh
+```
+
+A reprodução completa exige bem mais espaço em disco, pois baixa todos os modelos configurados em `benchmark/benchmark.py`. Recomenda-se reservar dezenas de GB livres antes de usar `PULL_MODELS=1`.
+
+### Espaço em disco para reprodução completa
+
+A reprodução completa é pesada porque baixa **8 modelos locais** pelo Ollama. A maior parte do espaço usado vem dos pesos dos modelos, não do código do projeto.
+
+Estimativa dos modelos usados pelo benchmark completo:
+
+| Modelo | Espaço aproximado |
+| --- | ---: |
+| `granite4.1:3b` | 2.1 GB |
+| `gemma4:latest` | 9.6 GB |
+| `falcon3:latest` | 4.6 GB |
+| `deepseek-coder:latest` | 776 MB |
+| `yi-coder:latest` | 5.0 GB |
+| `stable-code:latest` | 1.6 GB |
+| `laguna-xs.2:latest` | 23 GB |
+| `exaone-deep:latest` | 4.8 GB |
+
+Somente os modelos somam aproximadamente **51,5 GB**. Além disso, ainda há:
+
+- instalação do Ollama;
+- ambiente virtual Python e pacotes;
+- dependências Node da extensão;
+- cache de download;
+- arquivos de resultado do benchmark.
+
+Recomendação prática para a reprodução completa:
+
+- **60 GB livres**: mínimo aproximado;
+- **80 GB livres ou mais**: recomendado para evitar falhas por cache, downloads temporários ou mudanças nos tamanhos das tags `latest`.
+
+Os tamanhos dos modelos podem mudar com o tempo, especialmente nos modelos referenciados como `latest`. Por isso, para máquinas com pouco espaço, recomenda-se usar a reprodução mínima com `setup_minimal_reproducibility.sh`.
+
 ## Execução do Benchmark
 
 Entre no diretório `benchmark/` e execute:
