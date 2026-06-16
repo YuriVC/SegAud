@@ -1,4 +1,4 @@
-# SegAud
+# Benchmark de LLMs open source via Ollama para análise de segurança de código PHP.
 
 Repositório desenvolvido para a disciplina de **Segurança e Auditoria de Sistemas** do curso de **Bacharelado em Sistemas de Informação** do **Centro Federal de Educação Tecnológica Celso Suckow da Fonseca (CEFET/RJ)**, campus Nova Friburgo.
 
