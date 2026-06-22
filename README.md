@@ -96,7 +96,7 @@ As métricas utilizadas são calculadas a partir de verdadeiros positivos, falso
 Instalação das dependências:
 
 ```bash
-pip install requests pyyaml pandas matplotlib
+pip install -r requirements.txt
 ```
 
 Antes de executar o benchmark, verifique se o Ollama está disponível em:
@@ -205,6 +205,8 @@ Por padrão, esse script:
 - baixa o modelo `deepseek-coder:latest`;
 - executa o benchmark usando somente esse modelo.
 
+Se o download do modelo falhar, o script registra um aviso e continua. Nesse caso, o benchmark marca o modelo como `skipped` se ele não estiver disponível localmente no Ollama.
+
 Para permitir que o script tente instalar o Ollama automaticamente:
 
 ```bash
@@ -250,6 +252,8 @@ INSTALL_OLLAMA=1 PULL_MODELS=1 RUN_BENCHMARK=1 bash setup_reproducibility.sh
 
 A reprodução completa exige bem mais espaço em disco, pois baixa todos os modelos configurados em `benchmark/benchmark.py`. Recomenda-se reservar dezenas de GB livres antes de usar `PULL_MODELS=1`.
 
+Se algum `ollama pull` falhar durante a reprodução completa, o script continua com os demais modelos. Durante a execução, modelos indisponíveis são registrados como `skipped` nos resultados e o benchmark segue para o próximo modelo.
+
 ### Espaço em disco para reprodução completa
 
 A reprodução completa é pesada porque baixa **8 modelos locais** pelo Ollama. A maior parte do espaço usado vem dos pesos dos modelos, não do código do projeto.
@@ -291,6 +295,8 @@ python benchmark.py
 ```
 
 O script carregará os testes de `security_php.yaml`, enviará os prompts para cada modelo configurado e salvará os resultados no próprio diretório `benchmark/`.
+
+Quando um modelo configurado não está instalado ou não pode ser carregado pelo Ollama, ele é marcado como `skipped` e o benchmark passa para o próximo modelo. O arquivo `benchmark_results.csv` inclui as colunas `Status` e `Error` para indicar esse caso.
 
 ## Extensão para VS Code
 

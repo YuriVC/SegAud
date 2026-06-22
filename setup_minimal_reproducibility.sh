@@ -97,7 +97,7 @@ install_python_dependencies() {
 
   log "Installing benchmark Python dependencies"
   python -m pip install --upgrade pip
-  python -m pip install requests pyyaml pandas matplotlib
+  python -m pip install -r "$PROJECT_ROOT/requirements.txt"
 }
 
 install_extension_dependencies() {
@@ -221,7 +221,9 @@ pull_model() {
   fi
 
   log "Downloading minimal model: $MINIMAL_MODEL"
-  ollama pull "$MINIMAL_MODEL"
+  if ! ollama pull "$MINIMAL_MODEL"; then
+    warn "Could not pull $MINIMAL_MODEL. The benchmark will skip it if it is unavailable locally."
+  fi
 }
 
 run_minimal_benchmark() {
@@ -246,6 +248,11 @@ results, heatmap_data = benchmark.run_benchmark()
 print("\n=== FINAL RESULTS ===")
 for model_name, data in results.items():
     print(f"\n{model_name.upper()}")
+    if data.get("status") == "skipped":
+        print("Status   : skipped")
+        print(f"Reason   : {data.get('error', '')}")
+        continue
+
     print(f"Accuracy : {data['accuracy']:.6f}")
     print(f"Precision: {data['precision']:.6f}")
     print(f"Recall   : {data['recall']:.6f}")

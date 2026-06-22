@@ -43,6 +43,10 @@ MODELS = [
     "exaone-deep:latest"
 ]
 
+
+class ModelUnavailableError(Exception):
+    """Raised when Ollama reports that a configured model is unavailable."""
+
 # =====================================
 # LOAD TESTS
 # =====================================
@@ -135,7 +139,26 @@ def call_model(model, code_prompt):
         timeout=TIMEOUT
     )
 
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+    except requests.HTTPError as e:
+        response_text = response.text.lower()
+        model_error = (
+            response.status_code == 404
+            or "model" in response_text
+            and (
+                "not found" in response_text
+                or "not installed" in response_text
+                or "pull" in response_text
+            )
+        )
+
+        if model_error:
+            raise ModelUnavailableError(
+                f"Model unavailable in Ollama: {model}. Response: {response.text}"
+            ) from e
+
+        raise
 
     data = response.json()
 
@@ -338,6 +361,8 @@ def run_benchmark():
         total_tp = 0
         total_fp = 0
         total_fn = 0
+        skipped = False
+        skip_reason = ""
 
         for i, test in enumerate(tests):
 
@@ -390,6 +415,21 @@ def run_benchmark():
                     f"TP={tp} FP={fp} FN={fn}"
                 )
 
+            except ModelUnavailableError as e:
+
+                skipped = True
+                skip_reason = str(e)
+
+                print(
+                    f"[SKIPPED] {model}: {e}"
+                )
+
+                for remaining_test in tests[i:]:
+                    remaining_category = remaining_test.get("id", "unknown")
+                    heatmap_data[model][remaining_category] = 0
+
+                break
+
             except Exception as e:
 
                 print(
@@ -421,6 +461,13 @@ def run_benchmark():
 
             "fn": total_fn
         }
+
+        if skipped:
+            results[model]["status"] = "skipped"
+            results[model]["error"] = skip_reason
+        else:
+            results[model]["status"] = "completed"
+            results[model]["error"] = ""
 
         unload_model(model)
 
@@ -466,7 +513,11 @@ def save_csv(results):
 
             "FP": data["fp"],
 
-            "FN": data["fn"]
+            "FN": data["fn"],
+
+            "Status": data.get("status", "completed"),
+
+            "Error": data.get("error", "")
         })
 
     df = pd.DataFrame(rows)
@@ -488,6 +539,16 @@ def save_csv(results):
 # =====================================
 
 def plot_f1(results):
+
+    results = {
+        model: data
+        for model, data in results.items()
+        if data.get("status", "completed") == "completed"
+    }
+
+    if not results:
+        print("Skipping F1 chart: no completed models.")
+        return
 
     models = []
     f1_scores = []
@@ -526,6 +587,16 @@ def plot_f1(results):
 # =====================================
 
 def plot_metrics(results):
+
+    results = {
+        model: data
+        for model, data in results.items()
+        if data.get("status", "completed") == "completed"
+    }
+
+    if not results:
+        print("Skipping metrics chart: no completed models.")
+        return
 
     df = pd.DataFrame(results).T
 
@@ -576,6 +647,10 @@ def plot_heatmap(heatmap_data):
 
     df = pd.DataFrame(heatmap_data).T
 
+    if df.empty:
+        print("Skipping heatmap: no benchmark data.")
+        return
+
     plt.figure(figsize=(18, 8))
 
     plt.imshow(
@@ -616,6 +691,16 @@ def plot_heatmap(heatmap_data):
 # =====================================
 
 def plot_radar(results):
+
+    results = {
+        model: data
+        for model, data in results.items()
+        if data.get("status", "completed") == "completed"
+    }
+
+    if not results:
+        print("Skipping radar chart: no completed models.")
+        return
 
     metrics = [
         "accuracy",
@@ -682,6 +767,16 @@ def print_ranking(results):
 
     print("\n=== MODEL RANKING ===")
 
+    results = {
+        model: data
+        for model, data in results.items()
+        if data.get("status", "completed") == "completed"
+    }
+
+    if not results:
+        print("No completed models to rank.")
+        return
+
     ranked = sorted(
 
         results.items(),
@@ -717,6 +812,16 @@ if __name__ == "__main__":
     for model, data in results.items():
 
         print(f"\n{model.upper()}")
+
+        if data.get("status") == "skipped":
+
+            print("Status   : skipped")
+
+            print(
+                f"Reason   : {data.get('error', '')}"
+            )
+
+            continue
 
         print(
             f"Accuracy : {data['accuracy']:.6f}"

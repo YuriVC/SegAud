@@ -109,7 +109,7 @@ install_python_dependencies() {
 
   log "Installing benchmark Python dependencies"
   python -m pip install --upgrade pip
-  python -m pip install requests pyyaml pandas matplotlib
+  python -m pip install -r "$PROJECT_ROOT/requirements.txt"
 }
 
 install_extension_dependencies() {
@@ -254,7 +254,9 @@ pull_models() {
   log "Downloading benchmark models with Ollama"
   for model in "${MODELS[@]}"; do
     log "Pulling $model"
-    ollama pull "$model"
+    if ! ollama pull "$model"; then
+      warn "Could not pull $model. The benchmark will skip it if it is unavailable locally."
+    fi
   done
 }
 
